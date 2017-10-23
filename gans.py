@@ -54,36 +54,41 @@ class GAN_Classifier(object):
         self.k = tf.placeholder(tf.float32)
 
         # nets
-        self.G_sample = self.generator(concat(self.z, self.y))
+        self.G_sample = self.generator(self.z)
 
-        self.D_real = self.discriminator(self.X, self.y)
-        self.D_fake = self.discriminator(self.G_sample, self.y, reuse = True)
+        self.D_real = self.discriminator(self.X)
+        self.D_fake = self.discriminator(self.G_sample, reuse = True)
     
-        self.C_real = self.classifier(self.X)
-        self.C_fake = self.classifier(self.G_sample, reuse = True)
+        self.C_real = self.classifier(self.X, is_training=True)
+        self.C_fake = self.classifier(self.G_sample, is_training=True, reuse = True)
 
         self.lam = 10
         eps = tf.random_uniform([], minval=0., maxval=1.)#batch_size = 64
         self.X_inter = eps*self.X + (1. - eps)*self.G_sample
-        self.D_tmp = discriminator(self.X_inter, self.y, reuse = True)
+        self.D_tmp = discriminator(self.X_inter, reuse = True)
         grad = tf.gradients(self.D_tmp, self.X_inter)[0]
         grad_norm = tf.sqrt(tf.reduce_sum((grad)**2, axis=1))
         grad_pen = self.lam * tf.reduce_mean(grad_norm - 1.)**2    
 
         # loss
+        C_fake_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.C_fake, labels=self.y))
+        C_real_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.C_real, labels=self.y))
+        
         self.D_loss = - tf.reduce_mean(self.D_real) + tf.reduce_mean(self.D_fake) + grad_pen
-        self.G_loss = - tf.reduce_mean(self.D_fake)
-
+        self.G_loss = - tf.reduce_mean(self.D_fake) + C_fake_loss
+        self.C_loss = C_real_loss + C_fake_loss 
+        #self.C_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.C_fake, labels=self.y))  
         #self.clip_D = [var.assign(tf.clip_by_value(var, -0.01, 0.01)) for var in self.discriminator.vars]
 
-        self.C_real_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.C_real, labels=self.y)) # real label
-        self.C_fake_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.C_fake, labels=self.y))  
-        
         # solver
         self.D_solver = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.D_loss, var_list=self.discriminator.vars)
         self.G_solver = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.G_loss, var_list=self.generator.vars)
-        self.C_solver1 = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.C_real_loss + self.C_fake_loss, var_list=self.classifier.vars)
-        self.C_solver2 = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.C_fake_loss, var_list=self.generator.vars)        
+        self.C_solver = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.C_loss)
+
+        self.correct_prediction = tf.equal(tf.argmax(self.C_real, 1), tf.argmax(self.y, 1))
+        self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
+
+        #self.C_solver = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.C_fake_loss, var_list=self.generator.vars)        
 
         self.saver = tf.train.Saver(max_to_keep=5)
         gpu_options = tf.GPUOptions(allow_growth=True)
@@ -128,55 +133,44 @@ class GAN_Classifier(object):
 
         if not os.path.exists(ckpt_dir):
             os.makedirs(ckpt_dir)
-        learning_rate = 2e-4
+        learning_rate = 1e-4
 
         for epoch in range(training_epoches):
             # update D
-            n_d = 100 if epoch < 25 or (epoch+1) % 500 == 0 else 5
+            n_d = 100 if epoch < 30 or (epoch+1) % 500 == 0 else 5
 
             for _ in range(n_d):
-                X_b, y_b = self.data(batch_size)
+                X_b, y_b = self.data_min(batch_size)
                 self.sess.run(
-                    [self.D_solver],#clip
-                    feed_dict={self.X: X_b, self.y: y_b, self.z: sample_z(y_b.shape[0], self.z_dim), self.lr: learning_rate}
-                    )
+                    [self.D_solver], #clip
+                    feed_dict={self.X: X_b, self.z: sample_z(X_b.shape[0], self.z_dim), self.lr: learning_rate})
             # update G
             for _ in range(1):
                 self.sess.run(
                     self.G_solver,
-                    feed_dict={self.y:y_b, self.z: sample_z(y_b.shape[0], self.z_dim), self.lr: learning_rate}
-                )
+                    feed_dict={self.z: sample_z(X_b.shape[0], self.z_dim), self.y: y_b, self.lr: learning_rate})
                 
             # update C
-            # real label to train C
-            for _ in range(10):
-                X_b, y_b = self.data(batch_size)
+            for _ in range(20):
+                X_b, y_b = self.data_all(batch_size)
                 self.sess.run(
-                    self.C_solver1,
-                    feed_dict={self.X: X_b, self.y: y_b, self.lr: learning_rate}
-                    )
+                    self.C_solver,
+                    feed_dict={self.X: X_b, self.y: y_b, self.z: sample_z(X_b.shape[0], self.z_dim), self.lr: learning_rate})
             
-            # fake img label to train G
-            for _ in range(10):
-                self.sess.run(
-                    self.C_solver2,
-                    feed_dict={self.y: y_b, self.z: sample_z(batch_size, self.z_dim)})
             
             # save img, model. print loss
             if epoch % 100 == 0 or epoch < 100:
-                D_loss_curr, C_real_loss_curr = self.sess.run(
-                        [self.D_loss, self.C_real_loss],
-                        feed_dict={self.X: X_b, self.y: y_b, self.z: sample_z(y_b.shape[0], self.z_dim)})
-                G_loss_curr, C_fake_loss_curr = self.sess.run(
-                        [self.G_loss, self.C_fake_loss],
-                        feed_dict={self.y: y_b, self.z: sample_z(y_b.shape[0], self.z_dim)})
-                print('Iter: {}; D loss: {:.4}; G_loss: {:.4}; C_real_loss: {:.4}; C_fake_loss: {:.4}'.format(epoch, D_loss_curr, G_loss_curr, C_real_loss_curr, C_fake_loss_curr))
+                G_loss_curr, D_loss_curr, C_loss_curr, C_acc_curr = self.sess.run(
+                        [self.G_loss, self.D_loss, self.C_loss, self.accuracy],
+                        feed_dict={self.X: X_b, self.y: y_b, self.z: sample_z(X_b.shape[0], self.z_dim), self.lr: learning_rate})
+
+                print('Iter: {}; D loss: {:.4}; G_loss: {:.4}; C_loss: {:.4}; C_acc: {:.4}'.format(epoch, D_loss_curr, G_loss_curr, C_loss_curr, C_acc_curr))
 
                 if epoch % 500 == 0:
                     y_s = sample_y(16, self.y_dim)
                     samples = self.sess.run(self.G_sample, feed_dict={self.y: y_s, self.z: sample_z(16, self.z_dim)})
 
-                    fig = self.data.data2fig(samples)
+                    fig = self.data_min.data2fig(samples)
                     plt.savefig('{}/{}.png'.format(sample_folder, str(fig_count).zfill(3)), bbox_inches='tight')
                     fig_count += 1
                     plt.close(fig)
@@ -350,8 +344,7 @@ class Classifer():
                 X_b, y_b = self.data(batch_size)
                 self.sess.run(
                     [self.train_step],
-                    feed_dict={self.X: X_b, self.y: y_b, self.is_training: True}
-                    )
+                    feed_dict={self.X: X_b, self.y: y_b, self.is_training: True})
             
             # save img, model. print loss
             if epoch % 100 == 0 or epoch < 100:
