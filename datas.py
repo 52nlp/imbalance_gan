@@ -90,15 +90,15 @@ class mydata():
 
         #old version?
         data_list = []
-        for i in range(class_num):
+        for i in range(self.y_dim):
             class_sub = classes.split(',')[i]
             #print(class_sub)
             datapath = folder+class_sub+'/*.jpeg' #HERE
             print(datapath)
             data_list.extend(glob(datapath))
-        print('data_num:')
-        print(len(data_list))
-
+        print('data_num:',len(data_list))
+        
+        #get_img
         img_list = [get_img(img_path, self.size*3, self.size) for img_path in data_list]
         self.data = img_list
         # TFRecord
@@ -124,7 +124,7 @@ class mydata():
             label.append(label_count)
 
          
-        one_hot = np.zeros((len(label),self.y_dim))
+        one_hot = np.zeros((len(label),2))###self.y_dim
         for i,val in enumerate(label):
             one_hot[i,val]=1
         self.label = one_hot
