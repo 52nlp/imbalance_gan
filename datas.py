@@ -83,6 +83,11 @@ class celebA():
 class mydata():
     def __init__(self, size, classes, class_num):
 
+        self.z_dim = 512
+        self.y_dim = class_num
+        self.size = size
+        self.channel = 3 ##
+
         #old version?
         data_list = []
         for i in range(class_num):
@@ -93,19 +98,16 @@ class mydata():
             data_list.extend(glob(datapath))
         print('data_num:')
         print(len(data_list))
-        
+
+        img_list = [get_img(img_path, self.size*3, self.size) for img_path in data_list]
+        self.data = img_list
         # TFRecord
         #create_TFR(class,class_num)
         
 
         #datapath = folder+'data/'+class+'/'
-        self.z_dim = 512
-        self.y_dim = class_num
-        self.size = size
-        self.channel = 3 ##
-        self.data = data_list
-        self.index_list = [i for i in range(len(self.data))]
-
+        
+    
         #self.data = glob(os.path.join(datapath, '*.jpg'))
         #print(self.data)
 
@@ -113,7 +115,7 @@ class mydata():
         label = [] 
         check = []
         label_count = -1
-        for path in self.data: 
+        for path in data_list: 
             class_id = path.split('/')[6]#7,5
             #print(class_id)
             if class_id not in check:
@@ -128,6 +130,7 @@ class mydata():
         self.label = one_hot
         #print(len(label)) 
         self.batch_count = 0
+
         tmp = list(zip(self.data, self.label))
         random.shuffle(tmp)
         self.data ,self.label = zip(*tmp)
@@ -145,11 +148,11 @@ class mydata():
             random.shuffle(tmp)
             self.data ,self.label = zip(*tmp)
 
-        path_list = self.data[self.batch_count*batch_size:(self.batch_count+1)*batch_size]
+        img_b = self.data[self.batch_count*batch_size:(self.batch_count+1)*batch_size]
         label_b = self.label[self.batch_count*batch_size:(self.batch_count+1)*batch_size]
 
-        batch = [get_img(img_path, self.size*3, self.size) for img_path in path_list]
-        img_b = np.array(batch).astype(np.float32)
+        #batch = [get_img(img_path, self.size*3, self.size) for img_path in path_list]
+        img_b = np.array(img_b).astype(np.float32)
         
        
 
