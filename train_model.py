@@ -44,12 +44,13 @@ if __name__ == '__main__':
 
         # param
         generator = G_conv(size=int(img_size),is_tanh=False)
-        discriminator = D_conv_condition(size=int(img_size))
+        discriminator = D_conv(size=int(img_size))
         #classifier = C_conv(size=int(img_size),class_num=int(class_num))
         #classifier = nielsen_net(class_num=int(class_num))
         classifier = net_in_net(class_num=int(class_num))
 
         min_class_id = class_id.split(',')[0]
+        print('min:',min_class_id)
         data_all = mydata(size=int(img_size), classes=class_id, class_num=int(class_num))
         data_min = mydata(size=int(img_size), classes=min_class_id, class_num=1)
 
@@ -57,9 +58,9 @@ if __name__ == '__main__':
         GAN = GAN_Classifier(generator, discriminator, classifier, data_all, data_min)
         if restore == 'True':
             GAN.restore_ckpt(restore_folder)
-            GAN.train(sample_folder, ckpt_dir=ckpt_folder, batch_size = 16, restore=True)
+            GAN.train(sample_folder, ckpt_dir=ckpt_folder, batch_size = 32, restore=True)
         else:
-            GAN.train(sample_folder, ckpt_dir=ckpt_folder, batch_size = 16, restore=False)
+            GAN.train(sample_folder, ckpt_dir=ckpt_folder, batch_size = 32, restore=False)
 
 #######
     elif model == 'wgan':
