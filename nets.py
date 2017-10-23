@@ -19,8 +19,10 @@ class nielsen_net(object):
         self.name = 'nielsen_net'
         self.class_num = class_num
 
-    def __call__(self, inputs, is_training):
+    def __call__(self, inputs, is_training, reuse=False):
         with tf.variable_scope(self.name) as scope:
+            if reuse:
+                scope.reuse_variables()
             # First Group: Convolution + Pooling 28x28x1 => 28x28x20 => 14x14x20
             net = slim.conv2d(inputs, 20, [5, 5], padding='SAME', scope='layer1-conv')
             net = slim.max_pool2d(net, 2, stride=2, scope='layer2-max-pool')
@@ -51,10 +53,11 @@ class net_in_net(object):
         self.name = 'net_in_net'
         self.class_num = class_num
 
-    def __call__(self, inputs, is_training):
+    def __call__(self, inputs, is_training, reuse=False):
         with tf.variable_scope(self.name) as scope:
             # Conv1 (Input Size: 128x128)
-            
+            if reuse:
+                scope.reuse_variables()
             net = slim.conv2d(inputs, 128, [5, 5], padding='SAME', scope='conv1')
             net = slim.conv2d(net, 128, [1, 1], padding='SAME', scope='conv1.1')
             net = slim.conv2d(net, 128, [1, 1], padding='SAME', scope='conv1.2')
