@@ -13,17 +13,16 @@ from tensorflow.examples.tutorials.mnist import input_data
 
 from tfrecord import *
 
-folder = '/home/project/itriDR/pre_data/train_slm_512/'
-def get_img(img_path, crop_h, resize_h):
+#data_folder = '/home/project/itriDR/pre_data/train_slm_512/'
+def get_img(img_path, resize_h):
     img=scipy.misc.imread(img_path).astype(np.float) # mode L for grayscale
     #print(img.shape)
      
     #print(img.shape)
     #crop resize  Original Use
-    crop_w = crop_h
     resize_h = resize_h
     resize_w = resize_h
-    h, w = img.shape[:2]
+    #h, w = img.shape[:2]
     #j = int(round((h - crop_h)/2.))
     #i = int(round((w - crop_w)/2.))
     #cropped_image = scipy.misc.imresize(img[j:j+crop_h, i:i+crop_w],[resize_h, resize_w])# cropp
@@ -81,31 +80,36 @@ class celebA():
         return fig
 
 class mydata():
-    def __init__(self, size, classes, class_num):
+    def __init__(self, data_folder, size, classes, class_num, is_val=False):
 
         self.z_dim = 512
         self.y_dim = class_num
         self.size = size
         self.channel = 3 ##
-
+        
         #old version?
         data_list = []
+        new_id = ''
         for i in range(self.y_dim):
             class_sub = classes.split(',')[i]
+            new_id += class_sub
             #print(class_sub)
-            datapath = folder+class_sub+'/*.jpeg' #HERE
+            datapath = data_folder+class_sub+'/*' #HERE
             print(datapath)
             data_list.extend(glob(datapath))
         print('data_num:',len(data_list))
-        
-        #get_img
-        img_list = [get_img(img_path, self.size*3, self.size) for img_path in data_list]
-        self.data = img_list
-        # TFRecord
-        #create_TFR(class,class_num)
-        
 
-        #datapath = folder+'data/'+class+'/'
+        self.filename = './tfrecords/'+ data_folder.split('/')[3] + '-' + data_folder.split('/')[5]+'_'+new_id+'.tfrecords'#DR 3,5  my research 2,3
+        print(self.filename)
+        #TFRecord
+        self.len = create_TFR(classes,class_num,filename=self.filename,folder=data_folder,img_size=self.size,is_val=is_val)
+
+        '''
+        #get_img
+        img_list = [get_img(img_path, self.size) for img_path in data_list]
+        self.data = img_list
+
+        #datapath = data_folder+'data/'+class+'/'
         
     
         #self.data = glob(os.path.join(datapath, '*.jpg'))
@@ -123,17 +127,18 @@ class mydata():
                 label_count+=1
             label.append(label_count)
 
-         
-        one_hot = np.zeros((len(label),2))###self.y_dim
+        #print(label)
+        one_hot = np.zeros((len(label),self.y_dim))###self.y_dim  # my im gan = 2
         for i,val in enumerate(label):
             one_hot[i,val]=1
+        #print(one_hot)
         self.label = one_hot
         #print(len(label)) 
         self.batch_count = 0
 
         tmp = list(zip(self.data, self.label))
         random.shuffle(tmp)
-        self.data ,self.label = zip(*tmp)
+        self.data ,self.label = zip(*tmp)'''
 
     def __call__(self,batch_size):
         #print(img_b)
