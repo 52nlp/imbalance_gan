@@ -14,6 +14,20 @@ def xavier_init(size):
     xavier_stddev = 1. / tf.sqrt(in_dim / 2.)
     return tf.random_normal(shape=size, stddev=xavier_stddev)
 
+class my_inception_v3(object):
+    def __init__(self, class_num):
+        self.name = 'InceptionV3'
+        self.class_num = class_num
+
+    def __call__(self, inputs, is_training, reuse=False,dropout_keep_prob=0.8):
+        
+        y_pred, end_ps = slim.nets.inception.inception_v3(inputs=inputs, num_classes=self.class_num, is_training=is_training, reuse=reuse)
+        
+        return y_pred
+    @property
+    def vars(self):
+        return [var for var in tf.global_variables() if self.name in var.name]
+
 class nielsen_net(object):
     def __init__(self, class_num):
         self.name = 'nielsen_net'
@@ -30,7 +44,7 @@ class nielsen_net(object):
             # Second Group: Convolution + Pooling 14x14x20 => 10x10x40 => 5x5x40
             net = slim.conv2d(net, 40, [5, 5], padding='VALID', scope='layer3-conv')
             net = slim.max_pool2d(net, 2, stride=2, scope='layer4-max-pool')
-            #print(net.shape)
+            print(net.shape)
             # Reshape: 5x5x40 => 1000x1
             net = tf.reshape(net, [-1, 30*30*40]) #about img size
 
@@ -47,7 +61,10 @@ class nielsen_net(object):
             net = slim.dropout(net, is_training=is_training, scope='output-dropout')
 
             return net
-
+    @property
+    def vars(self):
+        return [var for var in tf.global_variables() if self.name in var.name]
+        
 class net_in_net(object):
     def __init__(self, class_num):
         self.name = 'net_in_net'
@@ -58,25 +75,25 @@ class net_in_net(object):
             # Conv1 (Input Size: 128x128)
             if reuse:
                 scope.reuse_variables()
-            net = slim.conv2d(inputs, 128, [5, 5], padding='SAME', scope='conv1')
-            net = slim.conv2d(net, 128, [1, 1], padding='SAME', scope='conv1.1')
-            net = slim.conv2d(net, 128, [1, 1], padding='SAME', scope='conv1.2')
-            net = slim.max_pool2d(net, [3, 3], padding='SAME', stride=2, scope='maxpool1')
+            net = slim.conv2d(inputs, 192, [5, 5], padding='SAME', scope='conv1',is_training=is_training)
+            net = slim.conv2d(net, 160, [1, 1], padding='SAME', scope='conv1.1',is_training=is_training)
+            net = slim.conv2d(net, 96, [1, 1], padding='SAME', scope='conv1.2',is_training=is_training)
+            net = slim.max_pool2d(net, [3, 3], padding='SAME', stride=2, scope='maxpool1',is_training=is_training)
             
             # Conv2 (Input Size: 64x64)
-            net = slim.conv2d(net, 64, [5, 5], padding='SAME', scope='conv2')
-            net = slim.conv2d(net, 64, [1, 1], padding='SAME', scope='conv2.1')
-            net = slim.conv2d(net, 64, [1, 1], padding='SAME', scope='conv2.2')
-            net = slim.max_pool2d(net, [3, 3], padding='SAME', stride=2, scope='maxpool2')
+            net = slim.conv2d(net, 192, [5, 5], padding='SAME', scope='conv2',is_training=is_training)
+            net = slim.conv2d(net, 192, [1, 1], padding='SAME', scope='conv2.1',is_training=is_training)
+            net = slim.conv2d(net, 192, [1, 1], padding='SAME', scope='conv2.2',is_training=is_training)
+            net = slim.avg_pool2d(net, [3, 3], padding='SAME', stride=2, scope='maxpool2',is_training=is_training)
             
             # Conv3 (Input Size: 32x32)
-            net = slim.conv2d(net, 32, [5, 5], padding='SAME', scope='conv3')
-            net = slim.conv2d(net, 32, [1, 1], padding='SAME', scope='conv3.1')
-            net = slim.conv2d(net, 32, [1, 1], padding='SAME', scope='conv3.2')
-            net = slim.max_pool2d(net, [3, 3], padding='SAME', stride=2, scope='maxpool3')
+            net = slim.conv2d(net, 192, [5, 5], padding='SAME', scope='conv3',is_training=is_training)
+            net = slim.conv2d(net, 192, [1, 1], padding='SAME', scope='conv3.1',is_training=is_training)
+            net = slim.conv2d(net, 10, [1, 1], padding='SAME', scope='conv3.2',is_training=is_training)
+            net = slim.avg_pool2d(net, [3, 3], padding='SAME', stride=2, scope='maxpool3',is_training=is_training)
             
             # Reshape
-            net = tf.reshape(net, [-1, 16*16*32])
+            net = tcl.flatten(net)
 
             # Fc1 (Input Size: 8192, OutputSize: 256)
             net = slim.fully_connected(net, 256, scope='fc1')
@@ -85,6 +102,9 @@ class net_in_net(object):
             net = slim.fully_connected(net, self.class_num, scope='fc2_Output')
 
             return net
+    @property
+    def vars(self):
+        return [var for var in tf.global_variables() if self.name in var.name]
 
 ###############################################  mlp #############################################
 class G_mlp(object):
@@ -352,7 +372,7 @@ class C_conv(object):
         self.class_num = class_num
         self.size = size
 
-    def __call__(self, x, reuse=False):
+    def __call__(self, x, is_training, reuse=False):
         with tf.variable_scope(self.name) as scope:
             if reuse:
                 scope.reuse_variables()
